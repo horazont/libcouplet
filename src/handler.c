@@ -133,6 +133,7 @@ uint64_t handler_fire_timed(xmpp_ctx_t * const ctx)
 {
 	list_t *connitem;
 	list_t *hlistitem, *tail;
+	list_head_t *reinsert;
 	xmpp_handler_t *handitem;
 	xmpp_conn_t *conn;
 	int ret, fired;
@@ -140,13 +141,13 @@ uint64_t handler_fire_timed(xmpp_ctx_t * const ctx)
 
 	min = (uint64_t)(-1);
 
+	reinsert = list_init(ctx);
 	connitem = list_get_first(ctx->connlist);
 	while (connitem) {
 		conn = (xmpp_conn_t *)connitem->data;
 		if (conn->state != XMPP_STATE_CONNECTED)
 			goto loop_conn_continue;
 
-		tail = list_get_last(conn->timed_handlers);
 		while ((hlistitem = list_shift(conn->timed_handlers))) {
 			fired = 0;
 			handitem = (xmpp_handler_t *)hlistitem->data;
@@ -170,16 +171,16 @@ loop_handlers_continue:
 				xmpp_free(ctx, handitem);
 				xmpp_free(ctx, hlistitem);
 			} else
-				list_push(conn->timed_handlers, hlistitem);
-
-			/* skip newly added and watched handlers */
-			if (hlistitem == tail)
-				break;
+				list_push(reinsert, hlistitem);
 		}
-
+		while ((hlistitem = list_shift(reinsert))) {
+			list_push(conn->timed_handlers, hlistitem);
+		}
 loop_conn_continue:
 		connitem = list_get_next(ctx->connlist, connitem);
 	}
+
+	list_destroy(reinsert);
 
 	return min;
 }
